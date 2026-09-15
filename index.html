@@ -1193,12 +1193,53 @@
       const rows = getActive().rows;
       const last = rows[rows.length - 1];
       const nextMin = last ? Number(last.minute) + 1 : 0;
-      rows.push({
-        minute: nextMin, bt: last ? last.bt + 10 : 200, gas: last ? last.gas : 0
-      });
+      rows.push({ minute: nextMin }); // BT/화력 등은 전부 비운 채로 새 행 생성
       renderTable();
       updateCharts();
       persistState();
+    });
+
+    // 위/아래 화살표로 셀 이동 (숫자 입력칸의 기본 증감 동작 대신 스프레드시트처럼 위/아래 행 이동)
+    // 표는 renderTable()에서 매번 새로 그려지므로, 부모(tbody)에 한 번만 이벤트를 걸어 위임 처리
+    document.getElementById('tableBody').addEventListener('keydown', (e) => {
+      const input = e.target;
+      if (!input.matches('input')) return;
+
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault(); // 숫자칸의 값이 증감되는 기본 동작 방지 (이동할 행이 없어도 항상 막음)
+        const currentTr = input.closest('tr');
+        const targetTr = e.key === 'ArrowUp' ? currentTr.previousElementSibling : currentTr.nextElementSibling;
+        if (!targetTr) return;
+        const field = input.dataset.field;
+        const targetInput = targetTr.querySelector(`input[data-field="${field}"]`);
+        if (targetInput) {
+          targetInput.focus();
+          targetInput.select();
+        }
+        return;
+      }
+
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        // number 타입 입력칸은 브라우저가 커서 위치(selectionStart 등) 조회를 지원하지 않으므로
+        // 숫자칸은 항상 옆 셀로 이동, 텍스트칸(메모)만 커서가 글자 끝/시작에 있을 때만 이동
+        let shouldMove = true;
+        if (input.type === 'text') {
+          const atStart = input.selectionStart === 0 && input.selectionEnd === 0;
+          const atEnd = input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
+          shouldMove = (e.key === 'ArrowLeft' && atStart) || (e.key === 'ArrowRight' && atEnd);
+        }
+        if (!shouldMove) return; // 텍스트 중간이면 기본 커서 이동 동작에 맡김
+
+        const allInputs = Array.from(document.querySelectorAll('#tableBody input'));
+        const idx = allInputs.indexOf(input);
+        const targetIdx = e.key === 'ArrowLeft' ? idx - 1 : idx + 1;
+        const targetInput = allInputs[targetIdx];
+        if (targetInput) {
+          e.preventDefault();
+          targetInput.focus();
+          targetInput.select();
+        }
+      }
     });
 
     // 시트 이름 입력 (타이틀)
